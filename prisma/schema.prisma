@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model WarmupSettings {
+  id        String   @id @default("default")
+  startDate String // YYYY-MM-DD
+  updatedAt DateTime @updatedAt
+
+  @@map("warmup_settings")
+}
+
+model Pipeline {
+  id          String          @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  isDefault   Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  stages      PipelineStage[]
+  leads       Lead[]
+
+  @@map("pipelines")
+}
+
+model PipelineStage {
+  id         String   @id @default(uuid()) @db.Uuid
+  pipelineId String   @db.Uuid
+  name       String
+  order      Int
+  color      String   @default("blue")
+  pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  leads      Lead[]
+  createdAt  DateTime @default(now())
+
+  @@unique([id, pipelineId])
+  @@index([pipelineId])
+  @@map("pipeline_stages")
+}
+
+model Lead {
+  id               String   @id @default(uuid()) @db.Uuid
+  pipelineId       String   @db.Uuid
+  stageId          String   @db.Uuid
+  name             String
+  company          String?
+  niche            String?
+  location         String?
+  tier             String   @default("GOLD") // PLATINUM, GOLD, BRONZE
+  channel          String   @default("FACEBOOK") // FACEBOOK, INSTAGRAM, COLD_EMAIL, COLD_CALL, GOOGLE_MAPS, META_ADS, LINKEDIN
+  email            String?
+  phone            String?
+  website          String?
+  profileUrl       String?
+  techStack        String?
+  dealValue        Float    @default(0)
+  followUpCount    Int      @default(0)
+  lastContactDate  String?
+  nextFollowUpDate String?
+  notes            String?
+  stageEnteredAt   DateTime @default(now()) @db.Timestamp(3)
+  emailKey         String?  @unique(map: "leads_email_key_key")
+  profileKey       String?  @unique(map: "leads_profile_key_key")
+  createdById      String?  @db.Uuid
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  pipeline   Pipeline       @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage      PipelineStage  @relation(fields: [stageId, pipelineId], references: [id, pipelineId], onDelete: Cascade)
+  createdBy  AppUser?       @relation("LeadCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  activities LeadActivity[]
+  reminders  LeadReminder[]
+
+  @@index([stageId, pipelineId])
+  @@index([stageEnteredAt], map: "leads_stage_entered_at_idx")
+  @@map("leads")
+}
+
+model AppUser {
+  id           String         @id @default(uuid()) @db.Uuid
+  email        String         @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  sessions     AppSession[]
+  createdLeads Lead[]         @relation("LeadCreator")
+  reminders    LeadReminder[]
+
+  @@map("app_users")
+}
+
+model AppSession {
+  id        String   @id @default(uuid()) @db.Uuid
+  tokenHash String   @unique
+  userId    String   @db.Uuid
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      AppUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "app_sessions_user_id_idx")
+  @@index([expiresAt], map: "app_sessions_expires_at_idx")
+  @@map("app_sessions")
+}
+
+model LeadReminder {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String    @db.Uuid
+  leadId         String    @db.Uuid
+  stageEnteredAt DateTime  @db.Timestamp(3)
+  lastRemindedAt DateTime  @db.Timestamp(3)
+  dismissedAt    DateTime? @db.Timestamp(3)
+  user           AppUser   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "lead_reminders_user_id_fkey")
+  lead           Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "lead_reminders_lead_id_fkey")
+
+  @@unique([userId, leadId], map: "lead_reminders_user_id_lead_id_key")
+  @@index([userId, dismissedAt], map: "lead_reminders_user_id_dismissed_at_idx")
+  @@map("lead_reminders")
+}
+
+model LeadActivity {
+  id        String   @id @default(uuid()) @db.Uuid
+  leadId    String   @db.Uuid
+  type      String   @default("NOTE") // NOTE, STAGE_CHANGE, DM_SENT, FOLLOW_UP, CALL_BOOKED
+  content   String
+  createdAt DateTime @default(now())
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@map("lead_activities")
+}
