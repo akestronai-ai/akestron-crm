@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   },
   cacheComponents: true,
   partialPrefetching: true,
+  outputFileTracingIncludes: {
+    '/*': ['./prisma/certs/postgres-ca.crt'],
+  },
 };
 
 export default nextConfig;
